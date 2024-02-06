@@ -1,11 +1,11 @@
 extern crate pcap;
 extern crate pnet;
 extern crate notify_rust;
-extern crate gtk;
 
 
-use gtk::prelude::*;
-use gtk::{Box, Label, Window, WindowType, Button};
+
+use druid::widget::{Label,Button,Flex};
+use druid::{AppLauncher, LocalizedString, Widget, WidgetExt, WindowDesc};
 use notify_rust::Notification;
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
 use pnet::packet::ip::IpNextHeaderProtocols;
@@ -36,68 +36,6 @@ fn find_icon_path() -> Option<String> {
     }
 }
 
-fn create_gui(state: Arc<Mutex<AppState>>) {
-    gtk::init().expect("Failed to initialize GTK.");
-
-    let window = Window::new(WindowType::Toplevel);
-    window.set_title("Cloner");
-    window.set_default_size(800, 900);
-
-    let vbox = Box::new(gtk::Orientation::Vertical, 0);
-    let hbox = Box::new(gtk::Orientation::Horizontal, 0);
-
-    let header_label = Label::new(Some("Header Label"));
-    vbox.pack_start(&header_label, false, false, 0);
-
-    let start_button = Button::with_label("Start");
-    let stop_button = Button::with_label("Stop");
-
-    hbox.pack_start(&start_button, false, false, 0);
-    hbox.pack_start(&stop_button, false, false, 0);
-
-    vbox.pack_start(&hbox, false, false, 0);
-
-    if let Some(icon_path) = find_icon_path() {
-        window.set_icon_from_file(&icon_path).ok();
-    }
-
-    window.add(&vbox);
-    window.show_all();
-
-    //This will be triggered when the user closes the window to terminate the program
-    window.connect_destroy(|_| {
-        gtk::main_quit();
-    });
-
-    let header_label_clone = header_label.clone();
-    let button1_clone = start_button.clone();
-    let button2_clone = stop_button.clone();
-
-
-    let state_clone = Arc::clone(&state);
-    start_button.connect_clicked(move |_|{
-        let mut state = state_clone.lock().unwrap();
-        if !state.monitoring{
-            //This starts the network monitor
-            thread::spawn(move||{
-                start_network_monitoring();
-            });
-            state.monitoring = true;
-        }
-    });
-
-    //Arc is the library that updates the reference count while maintaining the memory cloning of various components
-    let state_clone = Arc::clone(&state);
-    stop_button.connect_clicked(move |_| {
-        let mut state = state_clone.lock().unwrap();
-        //This checks if the monitor is running and the button is pressed then it stops it
-        if state.monitoring{
-            state.monitoring = false;
-        }
-    });
-
-    gtk::main();
-}
 
 fn start_network_monitoring() {
     let interface = "ens33";
@@ -173,10 +111,72 @@ fn send_alert(ip: &str, port: u16) {
         .unwrap();
 }
 
-fn main() {
-    // create_gui();  // This will run the GUI
-    // start_network_monitoring();  // This will start the network monitoring loop
+fn ui_builder() -> impl Widget<String> { //This will always return a widget
 
-    let state = Arc::new(Mutex::new(AppState::new()));
-    create_gui(state);
+    let header = Flex::row()
+    .with_child(Button::new("Start").on_click(|_ctx, _data: &mut String, _env|{
+        println!("Start clicked"); //printing in the terminal
+    }))
+    .with_child(Button::new("Stop").on_click(|_ctx, _data: &mut String, _env|{
+        println!("Stopped execution");
+    }));
+
+    // // Create a label widget to display the main content
+    // let label = Label::new(|_data: &String, _env: &_| "Network Cloner".to_string())
+    //     .with_text_size(24.0)
+    //     .center();
+
+    //we will combine the label and the header using a flex widget and then that widget will be returned 
+    // Flex::column()
+    // .with_child(header)
+    // .with_child(label)
+    // .padding(10.0) //this will be returned
+
+    //Labels for TCP 
+    let heading_tcp = Label::new("TCP")
+    .with_text_size(25.0);
+    // .align_horizontal(druid::widget::Alignment::center());
+
+    let tcp_labels = Flex::column()
+    .with_child(Label::new("Record 1"))
+    .with_child(Label::new("Record 2"));
+
+
+    //UDP labels
+    let heading_udp = Label::new("UDP")
+    .with_text_size(25.0);
+    // .align_horizontal(druid::widget::Alignment::center());
+
+    let udp_labels = Flex::column()
+    .with_child(Label::new("Record 1"))
+    .with_child(Label::new("Record 2"));
+
+
+    Flex::column()
+    .with_child(header)
+    .with_spacer(20.0)
+    .with_flex_child(Flex::row()
+        .with_child(Flex::column()
+        .with_child(heading_tcp)
+        .with_flex_child(tcp_labels, 1.0))
+        .with_spacer(350.0)
+        .with_child(Flex::column()
+        .with_child(heading_udp)
+        .with_flex_child(udp_labels,1.0)),
+    1.0)
+    .padding(20.0)
+    //Returning the flx widget made up of combination of flex widgets
+}
+fn main() {
+    
+    // start_network_monitoring();
+    let window = WindowDesc::new(ui_builder())
+    .title(LocalizedString::new("Hello World!"))
+    .window_size((600.0, 400.0));
+
+    // Create the application launcher
+    let app = AppLauncher::with_window(window);
+
+    // Launch the application
+    app.launch(String::from("Hello, Druid!")).expect("Failed to launch application");
 }

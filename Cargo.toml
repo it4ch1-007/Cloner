@@ -9,7 +9,10 @@ edition = "2021"
 pcap = "0.8" 
 pnet = "0.27" 
 notify-rust="4.0"
-gtk = "*"
+nix = { version = "0.26", features = ["user"] }
+zbus = "3.14.1"
+druid = "*"
+druid-shell = "*"
 [build-dependencies]
 pkg-config = "*"
 
