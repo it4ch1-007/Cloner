@@ -13,6 +13,7 @@ nix = { version = "0.26", features = ["user"] }
 zbus = "3.14.1"
 druid = "*"
 druid-shell = "*"
+bytes = "*"
 [build-dependencies]
 pkg-config = "*"
 
