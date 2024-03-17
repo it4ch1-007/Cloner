@@ -1,11 +1,16 @@
 [package]
-name = "network_monitor"
+name = "new_cloner"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+druid = "*"
 pcap = "0.8" 
 pnet = "0.27" 
 notify-rust="4.0"
+druid-shell = "*"
+bytes = "*"
+[build-dependencies]
+pkg-config = "*"
