@@ -1,31 +1,31 @@
-extern crate pcap;
-extern crate pnet;
-extern crate notify_rust;
+// extern crate pcap;
+// extern crate pnet;
+// extern crate notify_rust;
 
 use bytes::Bytes;
-use notify_rust::Notification;
+// use notify_rust::Notification;
 use druid::widget::{Button, Flex, Label,Align,TextBox,Container,Scroll};
 use druid::{AppLauncher, Data, Env, Lens, LocalizedString, Widget, WidgetExt, WindowDesc};
 use std::{process, result, string, thread};
 use std::sync::{Arc,Mutex};
 use std::time::Duration;
-use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
-use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::packet::ipv4::Ipv4Packet;
-use pnet::packet::tcp::TcpPacket;
-use pnet::packet::udp::UdpPacket;
-use pnet::packet::Packet;
+// use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
+// use pnet::packet::ip::IpNextHeaderProtocols;
+// use pnet::packet::ipv4::Ipv4Packet;
+// use pnet::packet::tcp::TcpPacket;
+// use pnet::packet::udp::UdpPacket;
+// use pnet::packet::Packet;
 
 use crate::my_app_state_derived_lenses::vec1;
 #[derive(Clone, Data, Lens)]
 
 
-//add fn that makes the line or label that has the detail of each packet
-//add fn to make the rule line colored
-//try to highlight the panels with different dim colors
-//add fn that start and stops the execution
-//add the fn that stores the data received from the packet then stores it into some storage data structure and then it is accessed by the fn that changes the data of the panel
-//show the vector contents once the content has been checked by the flag_malicious function
+
+//ADD THE TIMING DELAY TO THE EXEUCTION OF THE NETWORKING FUNCTION
+//TRY TO GET THE FUNCTION THAT CAN MONITOR NETWORK PACKETS ON WINDOWS
+//DISPLAY IT ON THE LABELS AND ALSO MAKE THE FLAG RED WHENEVER THE PAYLOAD IS FLAGGED MALICIOUS
+//THERE WILL BE A SEPARATE VECTOR THAT STORES THE NAMES OF ALL THE PAYLOADS AND THERE IPS AND ALL DETAILS THAT ARE FLAGGED MALICIOUS ACCORDING TO THE TOOL.
+
 
 struct MyAppState {
     #[data(same_fn = "PartialEq::eq")]
@@ -52,15 +52,35 @@ impl Default for MyAppState {
 
 fn flag_malicious(payload: &[u8]){
     let payloads: Vec<&[u8]> = vec![
-    b"'; DROP TABLE users; --",
-    b"1' OR '1'='1",
-    b"<script>alert('XSS Attack!');</script>",
-    b"<img src=\"javascript:alert('XSS Attack!');\">",
-    b"; rm -rf /",
-    b"../../../../../../../etc/passwd",
-    b"../..//..//..//etc/passwd",
-    b"<?php system($_GET['cmd']); ?>",
-    b"| rm -rf /",
+        b"'; DROP TABLE users; --",
+        b"1' OR '1'='1",
+        b"<script>alert('XSS Attack!');</script>",
+        b"<img src=\"javascript:alert('XSS Attack!');\">",
+        b"; rm -rf /",
+        b"../../../../../../../etc/passwd",
+        b"../..//..//..//etc/passwd",
+        b"<?php system($_GET['cmd']); ?>",
+        b"| rm -rf /",
+        //URL ENCODING
+        b"%27%3B%20DROP%20TABLE%20users%3B%20--",
+        b"1%27%20OR%20%271%27%3D%271",
+        b"%3Cscript%3Ealert%28%27XSS%20Attack%21%27%29%3B%3C/script%3E",
+        b"%3Cimg%20src%3D%22javascript%3Aalert%28%27XSS%20Attack%21%27%29%3B%22%3E",
+        b"%3B%20rm%20-rf%20/",
+        b"../../../../../../../etc/passwd",
+        b"../..//..//..//etc/passwd",
+        b"%3C%3Fphp%20system%28%24_GET%5B%27cmd%27%5D%29%3B%20%3F%3E",
+        b"%7C%20rm%20-rf%20/",
+        //Double URL encoding
+        b"%2527%253B%2520DROP%2520TABLE%2520users%253B%2520--",
+        b"1%2527%2520OR%2520%25271%2527%253D%25271",
+        b"%253Cscript%253Ealert%2528%2527XSS%2520Attack%2521%2527%2529%253B%253C/script%253E",
+        b"%253Cimg%2520src%253D%2522javascript%253Aalert%2528%2527XSS%2520Attack%2521%2527%2529%253B%2522%253E",
+        b"%253B%2520rm%2520-rf%2520/",
+        b"../../../../../../../etc/passwd",
+        b"../..//..//..//etc/passwd",
+        b"%253C%253Fphp%2520system%2528%2524_GET%255B%2527cmd%2527%255D%2529%253B%2520%253F%253E",
+        b"%257C%2520rm%2520-rf%2520/"
 ];
 for p in payloads {
     if std::str::from_utf8(p).unwrap().contains(std::str::from_utf8(payload).unwrap()) {
@@ -138,73 +158,73 @@ fn create_stop_button()-> impl Widget<MyAppState>{
     .padding((5.0,0.0))
 }
 fn start_network_monitoring() -> (String,String) {
-    let interface = "ens33";
-    let mut result_tcp = String::new();
-    let mut result_udp = String::new();
+//     let interface = "ens33";
+    let mut result_tcp = "first".to_string();
+    let mut result_udp = "second".to_string();
 
-    let mut cap = pcap::Capture::from_device(interface)
-        .unwrap()
-        .promisc(true)
-        .snaplen(5000)
-        .open()
-        .unwrap();
+//     let mut cap = pcap::Capture::from_device(interface)
+//         .unwrap()
+//         .promisc(true)
+//         .snaplen(5000)
+//         .open()
+//         .unwrap();
 
-    while let Ok(packet) = cap.next() {
-        if let Some(ethernet_packet) = EthernetPacket::new(&packet.data) {
-            match ethernet_packet.get_ethertype() {
-                EtherTypes::Ipv4 => {
-                    if let Some(ipv4_packet) = Ipv4Packet::new(ethernet_packet.payload()) {
-                        match ipv4_packet.get_next_level_protocol() {
-                            IpNextHeaderProtocols::Tcp => {
-                                let tcp_packet = TcpPacket::new(ipv4_packet.payload());
-                                if let Some(tcp_packet) = tcp_packet {
-                                    let payload_bytes = Bytes::copy_from_slice(tcp_packet.payload());
-                                    result_tcp.push_str(&format!(
-                                        "TCP Packet: {}.{}.{}.{}:{} > {}.{}.{}.{}:{}; Seq: {} \n Content: {:?}",
-                                        ipv4_packet.get_source().octets()[0],
-                                        ipv4_packet.get_source().octets()[1],
-                                        ipv4_packet.get_source().octets()[2],
-                                        ipv4_packet.get_source().octets()[3],
-                                        tcp_packet.get_source(),
-                                        ipv4_packet.get_destination().octets()[0],
-                                        ipv4_packet.get_destination().octets()[1],
-                                        ipv4_packet.get_destination().octets()[2],
-                                        ipv4_packet.get_destination().octets()[3],
-                                        tcp_packet.get_destination(),
-                                        tcp_packet.get_sequence(),
-                                        payload_bytes,
-                                    ));
-                                }
-                            }
-                            IpNextHeaderProtocols::Udp => {
-                                let udp_packet = UdpPacket::new(ipv4_packet.payload());
-                                if let Some(udp_packet) = udp_packet {
-                                    let payload_bytes = Bytes::copy_from_slice(udp_packet.payload());
-                                    result_udp.push_str(&format!(
-                                        "UDP Packet: {}.{}.{}.{}:{} > {}.{}.{}.{}:{}; Len: {} \n Payload: {:?}",
-                                        ipv4_packet.get_source().octets()[0],
-                                        ipv4_packet.get_source().octets()[1],
-                                        ipv4_packet.get_source().octets()[2],
-                                        ipv4_packet.get_source().octets()[3],
-                                        udp_packet.get_source(),
-                                        ipv4_packet.get_destination().octets()[0],
-                                        ipv4_packet.get_destination().octets()[1],
-                                        ipv4_packet.get_destination().octets()[2],
-                                        ipv4_packet.get_destination().octets()[3],
-                                        udp_packet.get_destination(),
-                                        udp_packet.get_length(),
-                                        payload_bytes
-                                    ));
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
+//     while let Ok(packet) = cap.next() {
+//         if let Some(ethernet_packet) = EthernetPacket::new(&packet.data) {
+//             match ethernet_packet.get_ethertype() {
+//                 EtherTypes::Ipv4 => {
+//                     if let Some(ipv4_packet) = Ipv4Packet::new(ethernet_packet.payload()) {
+//                         match ipv4_packet.get_next_level_protocol() {
+//                             IpNextHeaderProtocols::Tcp => {
+//                                 let tcp_packet = TcpPacket::new(ipv4_packet.payload());
+//                                 if let Some(tcp_packet) = tcp_packet {
+//                                     let payload_bytes = Bytes::copy_from_slice(tcp_packet.payload());
+//                                     result_tcp.push_str(&format!(
+//                                         "TCP Packet: {}.{}.{}.{}:{} > {}.{}.{}.{}:{}; Seq: {} \n Content: {:?}",
+//                                         ipv4_packet.get_source().octets()[0],
+//                                         ipv4_packet.get_source().octets()[1],
+//                                         ipv4_packet.get_source().octets()[2],
+//                                         ipv4_packet.get_source().octets()[3],
+//                                         tcp_packet.get_source(),
+//                                         ipv4_packet.get_destination().octets()[0],
+//                                         ipv4_packet.get_destination().octets()[1],
+//                                         ipv4_packet.get_destination().octets()[2],
+//                                         ipv4_packet.get_destination().octets()[3],
+//                                         tcp_packet.get_destination(),
+//                                         tcp_packet.get_sequence(),
+//                                         payload_bytes,
+//                                     ));
+//                                 }
+//                             }
+//                             IpNextHeaderProtocols::Udp => {
+//                                 let udp_packet = UdpPacket::new(ipv4_packet.payload());
+//                                 if let Some(udp_packet) = udp_packet {
+//                                     let payload_bytes = Bytes::copy_from_slice(udp_packet.payload());
+//                                     result_udp.push_str(&format!(
+//                                         "UDP Packet: {}.{}.{}.{}:{} > {}.{}.{}.{}:{}; Len: {} \n Payload: {:?}",
+//                                         ipv4_packet.get_source().octets()[0],
+//                                         ipv4_packet.get_source().octets()[1],
+//                                         ipv4_packet.get_source().octets()[2],
+//                                         ipv4_packet.get_source().octets()[3],
+//                                         udp_packet.get_source(),
+//                                         ipv4_packet.get_destination().octets()[0],
+//                                         ipv4_packet.get_destination().octets()[1],
+//                                         ipv4_packet.get_destination().octets()[2],
+//                                         ipv4_packet.get_destination().octets()[3],
+//                                         udp_packet.get_destination(),
+//                                         udp_packet.get_length(),
+//                                         payload_bytes
+//                                     ));
+//                                 }
+//                             }
+//                             _ => {}
+//                         }
+//                     }
+//                 }
+//                 _ => {}
+//             }
+//         }
+//     }
     (result_tcp,result_udp)
 }
 fn build_ui() -> impl Widget<MyAppState> {
