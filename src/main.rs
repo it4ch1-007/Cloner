@@ -2,7 +2,11 @@
 // extern crate pnet;
 // extern crate notify_rust;
 
+use chrono::prelude::*;
 use bytes::Bytes;
+use std::fs::File;
+use std::io::{prelude, Write};
+use std::path::Path;
 // use notify_rust::Notification;
 use druid::widget::{Button, Flex, Label,Align,TextBox,Container,Scroll};
 use druid::{AppLauncher, Data, Env, Lens, LocalizedString, Widget, WidgetExt, WindowDesc};
@@ -50,7 +54,7 @@ impl Default for MyAppState {
 }
 
 
-fn flag_malicious(payload: &[u8]){
+fn flag_malicious(payload: &[u8])-> bool{
     let payloads: Vec<&[u8]> = vec![
         b"'; DROP TABLE users; --",
         b"1' OR '1'='1",
@@ -85,10 +89,12 @@ fn flag_malicious(payload: &[u8]){
 for p in payloads {
     if std::str::from_utf8(p).unwrap().contains(std::str::from_utf8(payload).unwrap()) {
         println!("Payload is malicious: {:?}", p);
-        return;
+        true;
     }
 }
+
 println!("Payload is not malicious");
+false
 }
 fn main() {
     
@@ -157,10 +163,30 @@ fn create_stop_button()-> impl Widget<MyAppState>{
     })
     .padding((5.0,0.0))
 }
+fn store_payload_normal(path: &Path,s: &String){
+    let mut file = match File::create(&path){
+        Err(err) => panic!("Could'nt create the file  as {}",err), 
+        Ok(file) => file,
+    };
+    match file.write_all(s.as_bytes()){
+        Err(why) => panic!("Could'nt write the payload inside the file as {}",why),
+        Ok(_) => println!("File written successfully :)"),
+    }
+}
+fn store_payload_malicious(path: &Path,s: &String){
+    let mut file = match File::create(&path){
+        Err(err) => panic!("Could'nt create the file  as {}",err), 
+        Ok(file) => file,
+    };
+    match file.write_all(s.as_bytes()){
+        Err(why) => panic!("Could'nt write the payload inside the file as {}",why),
+        Ok(_) => println!("File written successfully :)"),
+    }
+}
 fn start_network_monitoring() -> (String,String) {
 //     let interface = "ens33";
-    let mut result_tcp = "first".to_string();
-    let mut result_udp = "second".to_string();
+    let mut result_tcp = Utc::now().to_string();
+    let mut result_udp = Utc::now().to_string();
 
 //     let mut cap = pcap::Capture::from_device(interface)
 //         .unwrap()
@@ -228,6 +254,8 @@ fn start_network_monitoring() -> (String,String) {
     (result_tcp,result_udp)
 }
 fn build_ui() -> impl Widget<MyAppState> {
+    
+
     let input_text_box = TextBox::new()
     .with_placeholder("Enter something")
     .lens(MyAppState::input_text);
@@ -300,14 +328,33 @@ fn build_ui() -> impl Widget<MyAppState> {
     .with_child((Label::new("Panel2")).padding((5.0,0.0)))
     .with_child(panel_hidden2));
 
-    
-    let vec1_label = Label::dynamic(|data: &MyAppState, _env| {
-        data.vec1.iter().map(|item| format!("{:?}", item)).collect::<Vec<_>>().join("\t")
+    let malicious_path = Path::new("mal.txt");
+    let normal_path = Path::new("logs.txt");
+    let vec1_label = Label::dynamic(move |data: &MyAppState, _env| {
+        // data.vec1.iter().map(|item| format!("{:?}", item)).collect::<Vec<_>>().join("\t")
+        
+        let s1: String = start_network_monitoring().0;
+        if flag_malicious(s1.as_bytes()){
+            store_payload_malicious(&malicious_path, &s1);
+        }
+        else{
+            store_payload_normal(&normal_path, &s1);
+        }
+        s1
+        //THIS IS WHERE THE STRING CONTAINING THE PAYLOAD SHOULD COME
     })
     .padding(10.0);
     
-    let vec2_label = Label::dynamic(|data: &MyAppState, _env| {
-        data.vec2.iter().map(|item| format!("{:?}", item)).collect::<Vec<_>>().join("\t")
+    let vec2_label = Label::dynamic(move |data: &MyAppState, _env| {
+        // data.vec2.iter().map(|item| format!("{:?}", item)).collect::<Vec<_>>().join("\t")
+        let s2: String = start_network_monitoring().1;
+        if flag_malicious(s2.as_bytes()){
+            store_payload_malicious(&malicious_path, &s2);
+        }
+        else{
+            store_payload_normal(&normal_path, &s2);
+        }
+        s2
     })
     .padding(10.0);
     
