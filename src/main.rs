@@ -1,6 +1,6 @@
-// extern crate pcap;
-// extern crate pnet;
-// extern crate notify_rust;
+extern crate pcap;
+extern crate pnet;
+extern crate notify_rust;
 
 use chrono::prelude::*;
 use bytes::Bytes;
@@ -13,12 +13,13 @@ use druid::{AppLauncher, Data, Env, Lens, LocalizedString, Widget, WidgetExt, Wi
 use std::{process, result, string, thread};
 use std::sync::{Arc,Mutex};
 use std::time::Duration;
-// use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
-// use pnet::packet::ip::IpNextHeaderProtocols;
-// use pnet::packet::ipv4::Ipv4Packet;
-// use pnet::packet::tcp::TcpPacket;
-// use pnet::packet::udp::UdpPacket;
-// use pnet::packet::Packet;
+use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
+use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::ipv4::Ipv4Packet;
+use pnet::packet::tcp::TcpPacket;
+use pnet::packet::udp::UdpPacket;
+use pnet::packet::Packet;
+use pcap::{Device,Capture};
 
 use crate::my_app_state_derived_lenses::vec1;
 #[derive(Clone, Data, Lens)]
@@ -98,34 +99,35 @@ false
 }
 fn main() {
     
-    let main_window = WindowDesc::new(build_ui())
-        .title(LocalizedString::new("Sniffer"));
+    // let main_window = WindowDesc::new(build_ui())
+    //     .title(LocalizedString::new("Sniffer"));
 
     // let initial_state = (MyAppState::default());
-    let shared_state = Arc::new(Mutex::new(MyAppState::default()));
+    // let shared_state = Arc::new(Mutex::new(MyAppState::default()));
 
-    // Clone the shared state for the input loop
-    let input_shared_state = shared_state.clone();
+    // // Clone the shared state for the input loop
+    // let input_shared_state = shared_state.clone();
      // Spawn a thread for the input loop
-    thread::spawn(move || {
-        loop {
-            let mut input = String::new();
-            println!("Enter text:");
-            std::io::stdin().read_line(&mut input).expect("Failed to read input");
+    // thread::spawn(move || {
+    //     loop {
+    //         let mut input = String::new();
+    //         println!("Enter text:");
+    //         std::io::stdin().read_line(&mut input).expect("Failed to read input");
 
-            // Update the shared state with the input text
-            let mut state = input_shared_state.lock().unwrap();
-            state.input_text = input.trim().to_string();
-        }
-    });
+    //         // Update the shared state with the input text
+    //         let mut state = input_shared_state.lock().unwrap();
+    //         state.input_text = input.trim().to_string();
+    //     }
+    
+    // });
 
-    let shared_state_ref = shared_state.lock().unwrap();
-    // Launch the Druid application with the main window and shared state
-    AppLauncher::with_window(main_window)
-        .use_simple_logger()
-        .launch(shared_state_ref.clone())
-        .expect("Failed to launch application");
-
+    // let shared_state_ref = shared_state.lock().unwrap();
+    // // Launch the Druid application with the main window and shared state
+    // AppLauncher::with_window(main_window)
+    //     .use_simple_logger()
+    //     .launch(shared_state_ref.clone())
+    //     .expect("Failed to launch application");
+        start_network_monitoring();
    
 }
 fn create_file_button()-> impl Widget<MyAppState>{
@@ -183,75 +185,92 @@ fn store_payload_malicious(path: &Path,s: &String){
         Ok(_) => println!("File written successfully :)"),
     }
 }
-fn start_network_monitoring() -> (String,String) {
-//     let interface = "ens33";
-    let mut result_tcp = Utc::now().to_string();
-    let mut result_udp = Utc::now().to_string();
+fn start_network_monitoring() {
+    let interface = "ens33";
+    // let mut result_tcp = Utc::now().to_string();
+    // let mut result_udp = Utc::now().to_string(); 
+    let mut result_tcp = String::new();
+    let mut result_udp = String::new();
+    let mut cap = pcap::Capture::from_device(interface)
+        .unwrap()
+        .promisc(true)
+        .snaplen(5000)
+        .open()
+        .unwrap();
+    let mut tcp_count = 0;
+    let mut udp_count = 0;
+    while(true){
+   if let Ok(packet) = cap.next(){
+    if let Some(ethernet_packet) = EthernetPacket::new(&packet.data) {
+                    match ethernet_packet.get_ethertype() {
+                        EtherTypes::Ipv4 => {
+                            if let Some(ipv4_packet) = Ipv4Packet::new(ethernet_packet.payload()) {
+                                match ipv4_packet.get_next_level_protocol() {
+                                    IpNextHeaderProtocols::Tcp => {
+                                        let tcp_packet = TcpPacket::new(ipv4_packet.payload());
+                                        if let Some(tcp_packet) = tcp_packet {
+                                            let payload_bytes = Bytes::copy_from_slice(tcp_packet.payload());
+                                            if tcp_count <1{
+                                            result_tcp.push_str(&format!(
+                                                "TCP Packet: {}.{}.{}.{}:{} > {}.{}.{}.{}:{}; Seq: {} \n Content: {:?}",
+                                                ipv4_packet.get_source().octets()[0],
+                                                ipv4_packet.get_source().octets()[1],
+                                                ipv4_packet.get_source().octets()[2],
+                                                ipv4_packet.get_source().octets()[3],
+                                                tcp_packet.get_source(),
+                                                ipv4_packet.get_destination().octets()[0],
+                                                ipv4_packet.get_destination().octets()[1],
+                                                ipv4_packet.get_destination().octets()[2],
+                                                ipv4_packet.get_destination().octets()[3],
+                                                tcp_packet.get_destination(),
+                                                tcp_packet.get_sequence(),
+                                                payload_bytes,
+                                            ));
+                                            tcp_count += 1;
+                                        }
+                                        }
+                                    }
+                                    IpNextHeaderProtocols::Udp => {
+                                        let udp_packet = UdpPacket::new(ipv4_packet.payload());
+                                        if let Some(udp_packet) = udp_packet {
+                                            let payload_bytes = Bytes::copy_from_slice(udp_packet.payload());
+                                            if udp_count < 1{
+                                            result_udp.push_str(&format!(
+                                                "UDP Packet: {}.{}.{}.{}:{} > {}.{}.{}.{}:{}; Len: {} \n Payload: {:?}",
+                                                ipv4_packet.get_source().octets()[0],
+                                                ipv4_packet.get_source().octets()[1],
+                                                ipv4_packet.get_source().octets()[2],
+                                                ipv4_packet.get_source().octets()[3],
+                                                udp_packet.get_source(),
+                                                ipv4_packet.get_destination().octets()[0],
+                                                ipv4_packet.get_destination().octets()[1],
+                                                ipv4_packet.get_destination().octets()[2],
+                                                ipv4_packet.get_destination().octets()[3],
+                                                udp_packet.get_destination(),
+                                                udp_packet.get_length(),
+                                                payload_bytes
+                                            ));
+                                            udp_count+=1;
+                                        }
 
-//     let mut cap = pcap::Capture::from_device(interface)
-//         .unwrap()
-//         .promisc(true)
-//         .snaplen(5000)
-//         .open()
-//         .unwrap();
-
-//     while let Ok(packet) = cap.next() {
-//         if let Some(ethernet_packet) = EthernetPacket::new(&packet.data) {
-//             match ethernet_packet.get_ethertype() {
-//                 EtherTypes::Ipv4 => {
-//                     if let Some(ipv4_packet) = Ipv4Packet::new(ethernet_packet.payload()) {
-//                         match ipv4_packet.get_next_level_protocol() {
-//                             IpNextHeaderProtocols::Tcp => {
-//                                 let tcp_packet = TcpPacket::new(ipv4_packet.payload());
-//                                 if let Some(tcp_packet) = tcp_packet {
-//                                     let payload_bytes = Bytes::copy_from_slice(tcp_packet.payload());
-//                                     result_tcp.push_str(&format!(
-//                                         "TCP Packet: {}.{}.{}.{}:{} > {}.{}.{}.{}:{}; Seq: {} \n Content: {:?}",
-//                                         ipv4_packet.get_source().octets()[0],
-//                                         ipv4_packet.get_source().octets()[1],
-//                                         ipv4_packet.get_source().octets()[2],
-//                                         ipv4_packet.get_source().octets()[3],
-//                                         tcp_packet.get_source(),
-//                                         ipv4_packet.get_destination().octets()[0],
-//                                         ipv4_packet.get_destination().octets()[1],
-//                                         ipv4_packet.get_destination().octets()[2],
-//                                         ipv4_packet.get_destination().octets()[3],
-//                                         tcp_packet.get_destination(),
-//                                         tcp_packet.get_sequence(),
-//                                         payload_bytes,
-//                                     ));
-//                                 }
-//                             }
-//                             IpNextHeaderProtocols::Udp => {
-//                                 let udp_packet = UdpPacket::new(ipv4_packet.payload());
-//                                 if let Some(udp_packet) = udp_packet {
-//                                     let payload_bytes = Bytes::copy_from_slice(udp_packet.payload());
-//                                     result_udp.push_str(&format!(
-//                                         "UDP Packet: {}.{}.{}.{}:{} > {}.{}.{}.{}:{}; Len: {} \n Payload: {:?}",
-//                                         ipv4_packet.get_source().octets()[0],
-//                                         ipv4_packet.get_source().octets()[1],
-//                                         ipv4_packet.get_source().octets()[2],
-//                                         ipv4_packet.get_source().octets()[3],
-//                                         udp_packet.get_source(),
-//                                         ipv4_packet.get_destination().octets()[0],
-//                                         ipv4_packet.get_destination().octets()[1],
-//                                         ipv4_packet.get_destination().octets()[2],
-//                                         ipv4_packet.get_destination().octets()[3],
-//                                         udp_packet.get_destination(),
-//                                         udp_packet.get_length(),
-//                                         payload_bytes
-//                                     ));
-//                                 }
-//                             }
-//                             _ => {}
-//                         }
-//                     }
-//                 }
-//                 _ => {}
-//             }
-//         }
-//     }
-    (result_tcp,result_udp)
+                                        }
+                                        if(tcp_count==1 && udp_count==1){
+                                        println!("{:?}   {:?}",result_tcp,result_udp);
+                                        break;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        
+    
+   
+}
 }
 fn build_ui() -> impl Widget<MyAppState> {
     
@@ -333,7 +352,7 @@ fn build_ui() -> impl Widget<MyAppState> {
     let vec1_label = Label::dynamic(move |data: &MyAppState, _env| {
         // data.vec1.iter().map(|item| format!("{:?}", item)).collect::<Vec<_>>().join("\t")
         
-        let s1: String = start_network_monitoring().0;
+        let s1: String = start_network_monitoring();
         if flag_malicious(s1.as_bytes()){
             store_payload_malicious(&malicious_path, &s1);
         }
@@ -347,7 +366,7 @@ fn build_ui() -> impl Widget<MyAppState> {
     
     let vec2_label = Label::dynamic(move |data: &MyAppState, _env| {
         // data.vec2.iter().map(|item| format!("{:?}", item)).collect::<Vec<_>>().join("\t")
-        let s2: String = start_network_monitoring().1;
+        let s2: String = start_network_monitoring();
         if flag_malicious(s2.as_bytes()){
             store_payload_malicious(&malicious_path, &s2);
         }
